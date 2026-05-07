@@ -20,6 +20,8 @@ type config struct {
 type application struct {
 	config config
 	logger *slog.Logger
+	// movie	data.Movie
+	// movies	[]data.Movie
 }
 
 func main() {
