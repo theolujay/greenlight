@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -76,12 +77,20 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		return nil, ErrRecordNotFound
 	}
 	var movie Movie
+
+	// Use the context.WithTimeout() function to create a context.Context which
+	// carries a 3-second timeout deadline. Note that an empty context.Background()
+	// is as the 'parent' context.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	query := `
-		SELECT id, created_at, title, year, runtime, genres, version
+		SELECT pg_sleep(8) id, created_at, title, year, runtime, genres, version
 		FROM movies
 		WHERE id = $1
 	`
-	err := m.DB.QueryRow(query, id).Scan(
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
+		&[]byte{},
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
@@ -105,7 +114,7 @@ func (m MovieModel) Update(movie *Movie) error {
 	query := `
 		UPDATE movies
 		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-		WHERE id = $5
+		WHERE id = $5 AND version = $6
 		RETURNING version
 	`
 	args := []any{
@@ -114,8 +123,21 @@ func (m MovieModel) Update(movie *Movie) error {
 		movie.Runtime,
 		pq.Array(movie.Genres),
 		movie.ID,
+		movie.Version,
 	}
-	return m.DB.QueryRow(query, args...).Scan(&movie.Version)
+	err := m.DB.QueryRow(query, args...).Scan(&movie.Version)
+	if err != nil {
+		switch {
+		// Since MovieModel.Get() would have been successful before MovieModel.Update()
+		// at its call site, it implies the version changed in between if ErrNoRows,
+		// indicating a data race that would have potentially occured.
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 func (m MovieModel) Delete(id int64) error {
