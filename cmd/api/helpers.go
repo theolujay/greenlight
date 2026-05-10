@@ -219,3 +219,24 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 
 	return i
 }
+
+// The background() helper accepts an arbitrary function as a parameter
+// to run withing a recover-able goroutine
+func (app *application) background(fn func()) {
+	// Increment the WaitGroup counter
+	app.wg.Add(1)
+	// Run a deferred function which uses recover() to catch any
+	// panic, and log an error message instead of terminating the
+	// application
+	go func() {
+		// Decrement the WaitGroup counter before the goroutine returns
+		defer app.wg.Done()
+		defer func() {
+			if err := recover(); err != nil {
+				app.logger.Error(fmt.Sprintf("%v", err))
+			}
+		}()
+
+		fn()
+	}()
+}
