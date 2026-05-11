@@ -7,6 +7,15 @@ Thanks for signing up for a Greenlight account. We're excited to have you on boa
 
 For future reference, your user ID number is {{.ID}}.
 
+To activate your Greenlight account please visit https://example.com/users/activate and
+enter the following code:
+
+--------------------------
+{{.activationToken}}
+--------------------------
+
+Please note that this is a one-time use token and it will expire in 3 days.
+
 Thanks,
 
 The Greenlight Team
@@ -25,6 +34,14 @@ The Greenlight Team
     <p>Hi,</p>
     <p>Thanks for signing up or a Greenlight account. We're excited to have you on board!</p>
     <p>For future reference, your user ID number is {{.ID}}.</p>
+    <p>To activate your Greenlight account please visit
+    https://example.com/users/activate and enter the following code:</p>
+    <pre><code>
+    --------------------------
+    {{.activationToken}}
+    --------------------------
+    </code></pre>
+    <p>Please note that this is a one-time use token and it will expire in 3 days.</p>
     <p>Thanks,</p>
     <p>The Greenlight Team</p>
 </body>
