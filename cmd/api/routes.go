@@ -22,7 +22,7 @@ func (app *application) routes() http.Handler {
 
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
 
-	standard := alice.New(app.recoverPanic, app.rateLimit)
+	standard := alice.New(app.recoverPanic, app.logRequest, app.rateLimit)
 
 	return standard.Then(router)
 }

@@ -10,6 +10,17 @@ import (
 	"golang.org/x/time/rate"
 )
 
+func (app *application) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.logger.Info(
+			fmt.Sprintf(
+				"%s - %s %s %s",
+				r.RemoteAddr, r.Proto, r.Method, r.URL.RequestURI()),
+		)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // The recoverPanic() method is a middleware for the server to send a
 // 500 Internal Server Error when it panics rather than just closing
 // the HTTP connection with no context. It doesn't recover panics in
@@ -45,6 +56,8 @@ func (app *application) recoverPanic(next http.Handler) http.Handler {
 	})
 }
 
+// The rateLimit() method is a middleware that implements rate-limiter
+// based on the IP address of the client.
 func (app *application) rateLimit(next http.Handler) http.Handler {
 	// Hold the rate limiter and last seen time for each client.
 	type client struct {
