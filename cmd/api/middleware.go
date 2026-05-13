@@ -2,9 +2,11 @@ package main
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -273,4 +275,93 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (app *application) metrics(next http.Handler) http.Handler {
+	var (
+		totalRequestsReceived           = expvar.NewInt("total_requests_received")
+		totalResponsesSent              = expvar.NewInt("total_resposes_sent")
+		totalProcessingTimeMicroseconds = expvar.NewInt("total_processing_time_μs")
+		totalResponsesSentByStatus      = expvar.NewMap("total_repsonses_sent_by_status")
+	)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Record the time that the we started to process the request
+		start := time.Now()
+		// Increment the number of requests received by 1
+		totalRequestsReceived.Add(1)
+		// Wrap the original http.ResponseWriter value the metrics
+		// received in a new metricsResponseWriter
+		mw := newMetricsResponseWriter(w)
+		// Call the next handler in the chain using the new
+		// metricsResponseWriter sa the http.ResponseWriter value
+		next.ServeHTTP(mw, r)
+		// On the way back up the middleware chain, increment
+		// the number of responses
+		totalResponsesSent.Add(1)
+		// The response status code should be stored in the mw.statusCode
+		// field by now. NOTE: the expvar map is string-keyed, so the
+		// status code (which is an integer) is converted to a string using
+		// the strconv.Itoa() function.
+		totalResponsesSentByStatus.Add(strconv.Itoa(mw.statusCode), 1)
+		// Calculate the number of microseconds since we began to
+		// process the request, then increment the total processing
+		// time by this amount
+		duration := time.Since(start).Microseconds()
+
+		totalProcessingTimeMicroseconds.Add(duration)
+	})
+}
+
+// The metricsResponseWriter type wraps an existing http.ResponseWriter
+// and also contains a field for recording the response status code, and
+// a boolean flag to indicate whether the reponse deaders have already
+// been written.
+type metricsResponseWriter struct {
+	wrapped       http.ResponseWriter
+	statusCode    int
+	headerWritten bool
+}
+
+// newMetricsResponseWriter() returns a new metricsResponseWriter instance
+// which wraps a given http.ResponseWriter and has a status code of 200
+// (which is the status code that Go will send in a HTTP repsonse by default).
+func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
+	return &metricsResponseWriter{
+		wrapped:    w,
+		statusCode: http.StatusOK,
+	}
+}
+
+// The Header() method is a simple 'pass-through' to the Header() method
+// of the wrapped http.ResponseWriter.
+func (mw *metricsResponseWriter) Header() http.Header {
+	return mw.wrapped.Header()
+}
+
+// The WriteHeader() is a pass-through to the WriteHeader() method
+// of the wrapped http.ResponseWriter. But after this returns, we
+// also record the response status code (it it hasn't already been
+// recorded) and set the headerWritten field to true to indicate
+// that the HTTP response headers hve now been written.
+func (mw *metricsResponseWriter) WriteHeader(statusCode int) {
+	mw.wrapped.WriteHeader(statusCode)
+
+	if !mw.headerWritten {
+		mw.statusCode = statusCode
+		mw.headerWritten = true
+	}
+}
+
+// The Write() method does a 'pass-through' to the Write() method
+// of the wrapped http.ResponseWriter. Calling this will automatically
+// write any response headers, so we set the headerWritten field to true.
+func (mw *metricsResponseWriter) Write(b []byte) (int, error) {
+	mw.headerWritten = true
+	return mw.wrapped.Write(b)
+}
+
+// The Unwrap() method returns the existing wrapped http.ResponseWriter
+func (mw *metricsResponseWriter) Unwrap() http.ResponseWriter {
+	return mw.wrapped
 }
