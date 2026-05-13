@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -236,4 +237,40 @@ func (app *application) requirePermission(code string, next http.HandlerFunc) ht
 	}
 
 	return app.requireActivatedUser(fn)
+}
+
+func (app *application) enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+		w.Header().Add("Vary", "Access-Control-Request-Method")
+
+		origin := r.Header.Get("Origin")
+
+		if origin != "" && slices.Contains(app.config.cors.trustedOrigins, origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+
+			// Check if the request has the HTTP method OPTIONS and contains the
+			// "Access-Control-Request-Method" header. If it does, then treat it
+			// as a preflight request.
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				// Set the necessary preflisht response headers
+				w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
+				// Since "Authorization" header is allowed, it's important to
+				// not set the wild card "Access-Control-Allow-Origin: *" header
+				// without checking against a list of trusted origins, as done
+				// above.
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+
+				// Write the headers along with a 200 OK and return from the
+				// the middleware with no further action. 200 OK is preferred
+				// to 204 No Content, as not a certain browser versions may
+				// not support 204 No Content responses and subsequently block
+				// the real request.
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
