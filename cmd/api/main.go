@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"expvar"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
@@ -15,10 +16,12 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/theolujay/greenlight/internal/data"
 	"github.com/theolujay/greenlight/internal/mailer"
+	"github.com/theolujay/greenlight/internal/vcs"
 )
 
-// Will rather be generated at build time in the future
-const version = "1.0.0"
+var (
+	version = vcs.Version()
+)
 
 type config struct {
 	port int
@@ -80,7 +83,14 @@ func main() {
 		return nil
 	})
 
+	displayVersion := flag.Bool("version", false, "Display version and exit")
+
 	flag.Parse()
+
+	if *displayVersion {
+		fmt.Printf("Version:\t%s\n", version)
+		os.Exit(0)
+	}
 
 	// Initialize a new structured logger which writes log entries to the standard out stream
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
