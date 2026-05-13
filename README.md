@@ -1,0 +1,1 @@
+Greenlight is a build-along project from the book by Alex Edwards, Let's Go Futher, a sequel to Let's Go. While it is essentially an API service that allows users manage information resource about movies, the goal was to learn and apply core principles to building JSON RESTful APIs in Go with mostly the standard library.
